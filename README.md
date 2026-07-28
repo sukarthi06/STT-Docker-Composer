@@ -1,1 +1,1 @@
-# STT-Docker-Composer
+# STT Docker Composer
