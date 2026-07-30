@@ -1,0 +1,109 @@
+services:
+  postgres:
+    ports:
+      - "5433:5432"
+
+    environment:
+      POSTGRES_DB: RecordingDb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    
+  recording-grpc-service:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: RecordingGrpcService
+      ConnectionStrings__RecordingDb: >
+        Server=postgres;
+        Port=5432;
+        Database=RecordingDb;
+        User Id=postgres;
+        Password=${POSTGRES_PASSWORD};
+        Include Error Detail=true
+    ports:
+      - "5200:8080"
+
+  clinical-grpc-service:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: ClinicalGrpcService
+      ConnectionStrings__ClinicalDocumentationDb: >
+        Server=postgres;
+        Port=5432;
+        Database=ClinicalDocumentationDb;
+        User Id=postgres;
+        Password=${POSTGRES_PASSWORD};
+        Include Error Detail=true
+    ports:
+      - "5201:8080"
+
+  physician-notes-api:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Cors__AllowedOrigins: http://localhost:5204,http://localhost:5200
+      OpenAI__ApiKey: ${GITHUB_MODELS_API_KEY}
+      OpenAI__Model: openai/gpt-4.1-mini
+      OpenAI__Endpoint: https://models.github.ai/inference
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: PhysicianNotes
+      RecordingGrpcService__Address: http://recording-grpc-service:8080
+      ClinicalGrpcService__Address: http://clinical-grpc-service:8080
+      Azure__StorageConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=${AZURE_ACCOUNT_KEY};BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    ports:
+      - "5202:8080"
+  
+  physician-worker:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: PhysicianWorker
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: ${RABBIT_MQ_PWD}
+      PhysicianNoteService__Address: http://physician-notes-api:8080
+
+  speech-transcript-worker:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: SpeechTranscriptWorker
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: ${RABBIT_MQ_PWD}
+      OpenAI__ApiKey: ${OPEN_AI_API_KEY}
+      RecordingGrpcService__Address: http://recording-grpc-service:8080
+      Azure__StorageConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=${AZURE_ACCOUNT_KEY};BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+
+  chunk-wav-conversion-worker:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: ChunkWavConversionWorker
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: ${RABBIT_MQ_PWD}
+      RecordingGrpcService__Address: http://recording-grpc-service:8080
+      Azure__StorageConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=${AZURE_ACCOUNT_KEY};BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+  
+  voice-capture-api:
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Cors__AllowedOrigins: http://localhost:5204,http://localhost:5200
+      Serilog__MinimumLevel__Default: Debug
+      Serilog__Properties__Application: VoiceCaptureApi
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: ${RABBIT_MQ_PWD}
+      RecordingGrpcService__Address: http://recording-grpc-service:8080
+      Azure__StorageConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=${AZURE_ACCOUNT_KEY};BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    ports:
+      - "5203:8080"
+
+  speech-to-text-app:
+    ports:
+      - "5204:80"

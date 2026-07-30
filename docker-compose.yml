@@ -1,0 +1,130 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 5s
+      timeout: 15s
+      retries: 5
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    command: >
+      azurite
+      --blobHost 0.0.0.0
+      --queueHost 0.0.0.0
+      --tableHost 0.0.0.0
+      --skipApiVersionCheck
+    ports:
+      - "10100:10000"
+      - "10101:10001"
+      - "10102:10002"
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d RecordingDb || exit 1"]
+      start_period: 30s
+      interval: 30s
+      timeout: 15s
+      retries: 5
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  
+  recording-grpc-service:
+    image: recording-grpc-service-comp
+    build:
+      context: ../RecordingGrpcService
+      dockerfile: RecordingGrpcService.Grpc/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  clinical-grpc-service:
+    image: clinical-grpc-service-comp
+    build:
+      context: ../ClinicalGrpcService
+      dockerfile: ClinicalGrpcService.Grpc/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  physician-notes-api:
+    image: physician-notes-comp
+    build:
+      context: ../PhysicianNotes
+      dockerfile: PhysicianNotes.Api/Dockerfile
+    depends_on:
+      azurite:
+        condition: service_started
+      recording-grpc-service:
+        condition: service_started
+      clinical-grpc-service:
+        condition: service_started
+  
+  physician-worker:
+    image: physician-worker-comp
+    build:
+      context: ../PhysicianWorker
+      dockerfile: PhysicianWorker.Worker/Dockerfile    
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      physician-notes-api:
+        condition: service_started
+
+  speech-transcript-worker:
+    image: speech-transcript-worker-comp
+    build:
+      context: ../SpeechTranscriptService
+      dockerfile: SpeechTranscriptService.Worker/Dockerfile    
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      recording-grpc-service:
+        condition: service_started
+
+  chunk-wav-conversion-worker:
+    image: wav-conversion-worker-comp
+    build:
+      context: ../TranscriptService
+      dockerfile: TranscriptService.Worker/Dockerfile    
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      recording-grpc-service:
+        condition: service_started
+
+  voice-capture-api:
+    image: voice-capture-service-comp
+    build:
+      context: ../VoiceCaptureService
+      dockerfile: VoiceCaptureService.Api/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      recording-grpc-service:
+        condition: service_started
+
+  speech-to-text-app:
+    image: speech-to-text-app-comp
+    build:
+      context: ../speech-to-text-app
+      dockerfile: Dockerfile
+
+volumes:
+  postgres-data:
