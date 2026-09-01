@@ -72,6 +72,7 @@ services:
       OpenAI__ApiKey: ${AZURE_OPENAI_API_KEY}
       OpenAI__Model: gpt-4.1-mini
       OpenAI__Endpoint: https://stt-claude.cognitiveservices.azure.com/openai/v1/
+      Icd10Lookup__BaseUrl: https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/
       Serilog__MinimumLevel__Default: Debug
       Serilog__Properties__Application: PhysicianNotes
       RecordingGrpcService__Address: http://recording-grpc-service:8080
